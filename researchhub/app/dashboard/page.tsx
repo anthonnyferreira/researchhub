@@ -95,34 +95,71 @@ export default async function DashboardPage() {
       .eq("department_id", coordinator.departmentId);
 
     const professorIds = (departmentProfessors ?? []).map((p) => p.id);
+    const professorCount = professorIds.length;
 
+    let allProjects: any[] = [];
     let pendingProjects: any[] = [];
-    let publishedCount = 0;
+    let statusCounts: Record<string, number> = {};
+    let publicationCount = 0;
+    let totalInterests = 0;
+    let recentInterests: any[] = [];
 
     if (professorIds.length > 0) {
-      const { data: pending } = await supabase
+      const { data: projects } = await supabase
         .from("projects")
         .select("id, title, summary, status, professors!projects_lead_professor_id_fkey(name)")
         .in("lead_professor_id", professorIds)
-        .eq("status", "in_review")
         .order("created_at", { ascending: false });
 
-      pendingProjects = pending ?? [];
+      allProjects = projects ?? [];
+      pendingProjects = allProjects.filter((p) => p.status === "in_review");
 
-      const { count } = await supabase
-        .from("projects")
-        .select("id", { count: "exact", head: true })
-        .in("lead_professor_id", professorIds)
-        .in("status", ["published", "recruiting", "ongoing", "completed"]);
+      for (const p of allProjects) {
+        statusCounts[p.status] = (statusCounts[p.status] ?? 0) + 1;
+      }
 
-      publishedCount = count ?? 0;
+      const { count: pubCount } = await supabase
+        .from("publication_authors")
+        .select("publication_id", { count: "exact", head: true })
+        .in("professor_id", professorIds);
+      publicationCount = pubCount ?? 0;
+
+      const projectIds = allProjects.map((p) => p.id);
+      if (projectIds.length > 0) {
+        const { count } = await supabase
+          .from("project_members")
+          .select("id", { count: "exact", head: true })
+          .in("project_id", projectIds);
+        totalInterests = count ?? 0;
+
+        const { data: recent } = await supabase
+          .from("project_members")
+          .select("id, created_at, users(name), projects(title)")
+          .in("project_id", projectIds)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        recentInterests = recent ?? [];
+      }
     }
+
+    const publishedCount = allProjects.filter((p) =>
+      ["published", "recruiting", "ongoing", "completed"].includes(p.status)
+    ).length;
 
     return (
       <CoordinatorDashboard
         departmentName={coordinator.departmentName ?? ""}
         pendingProjects={pendingProjects}
         publishedCount={publishedCount}
+        professorCount={professorCount}
+        projectCount={allProjects.length}
+        publicationCount={publicationCount}
+        totalInterests={totalInterests}
+        recentInterests={recentInterests.map((r: any) => ({
+          id: r.id,
+          studentName: r.users?.name ?? "",
+          projectTitle: r.projects?.title ?? "",
+        }))}
       />
     );
   }

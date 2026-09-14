@@ -12,11 +12,8 @@
 -- (seed.sql NÃO está incluído aqui de propósito — ele contém dados
 -- fictícios de exemplo, só para desenvolvimento local. Uma
 -- universidade real começa vazia e se popula pelo próprio site.)
---
--- Gerado a partir de: 1_schema, 3_rls, 4_auth, 5_interests,
--- 6_projects, 7_professor_selfcreate, 8_coordinator,
--- 9_research_content, 10_edit_content, 11_saved_items, 12_admin
 -- ============================================================
+
 
 -- ============================================================
 -- Origem: 1_schema.sql
@@ -991,32 +988,194 @@ create policy "Admin ou coordenador importa professores em massa" on professors
 -- Como cada instância representa UMA universidade só (modelo "um
 -- ResearchHub por universidade"), "toda a universidade" aqui
 -- equivale a "toda a instância".
+--
+-- IMPORTANTE: a checagem "essa pessoa é admin?" fica numa função
+-- SECURITY DEFINER (não numa subconsulta direta na policy). Isso
+-- evita recursão infinita: a policy de SELECT em `users` não pode
+-- consultar `users` de novo dentro de si mesma, ou o Postgres entra
+-- em loop tentando reavaliar a própria policy.
+
+create or replace function public.is_platform_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from universities un
+    join users admin_user on admin_user.id = un.owner_user_id
+    where admin_user.auth_user_id = auth.uid()
+  );
+$$;
 
 create policy "Admin vê todos os projetos" on projects
   for select
-  using (
-    exists (
-      select 1 from universities un
-      where un.owner_user_id = (select id from users where auth_user_id = auth.uid())
-    )
-  );
+  using (public.is_platform_admin());
 
 create policy "Admin vê todos os interesses" on project_members
   for select
-  using (
-    exists (
-      select 1 from universities un
-      where un.owner_user_id = (select id from users where auth_user_id = auth.uid())
-    )
-  );
+  using (public.is_platform_admin());
 
 create policy "Admin vê todos os usuários" on users
   for select
+  using (public.is_platform_admin());
+
+
+-- ============================================================
+-- Origem: 16_fix_recursion.sql
+-- ============================================================
+-- (já embutido no 15_admin_dashboard.sql acima com a versão corrigida,
+--  incluído aqui só por completude do histórico — não precisa rodar de novo
+--  se estiver instalando do zero com este arquivo.)
+
+-- ============================================================
+-- Origem: 17_coordinator_dashboard.sql
+-- ============================================================
+-- ============================================================
+-- Painel completo do Coordenador (item novo)
+-- ============================================================
+-- Rode depois de 16_fix_recursion.sql.
+--
+-- A policy de project_members existente (6_projects.sql) só permitia
+-- que o PRÓPRIO professor dono do projeto visse os interessados. O
+-- coordenador do departamento também precisa ver isso para o painel
+-- fazer sentido — sem isso, a consulta simplesmente volta vazia
+-- (bloqueada pelo RLS, sem erro nenhum, só sem dado).
+
+create policy "Coordenador vê interesses do departamento" on project_members
+  for select
   using (
-    exists (
-      select 1 from universities un
-      join users admin_user on admin_user.id = un.owner_user_id
-      where admin_user.auth_user_id = auth.uid()
+    project_id in (
+      select pr.id from projects pr
+      join professors p on p.id = pr.lead_professor_id
+      where p.department_id = (
+        select department_id from users
+        where auth_user_id = auth.uid() and role = 'coordinator'
+      )
     )
   );
+
+
+-- ============================================================
+-- Origem: 18_user_management.sql
+-- ============================================================
+-- ============================================================
+-- Admin gerencia usuários (item novo)
+-- ============================================================
+-- Rode depois de 17_coordinator_dashboard.sql.
+--
+-- Até agora, trocar o papel de alguém (promover a coordenador,
+-- rebaixar, suspender uma conta) só era possível mexendo direto no
+-- SQL Editor. Isso dá ao admin uma forma de fazer isso pela interface.
+--
+-- Restrição de propósito: essa policy NUNCA permite promover alguém a
+-- 'admin' — isso preserva a regra de "um admin só por instância",
+-- criada como bootstrap único em 12_admin.sql. Só quem passou pelo
+-- /configuracao original é admin; não existe caminho para criar um
+-- segundo depois disso.
+
+create policy "Admin gerencia usuários" on users
+  for update
+  using (public.is_platform_admin())
+  with check (public.is_platform_admin() and role <> 'admin');
+
+
+-- ============================================================
+-- Origem: 19_suspend_enforcement.sql
+-- ============================================================
+-- ============================================================
+-- P0 — Suspensão real de conta
+-- ============================================================
+-- Rode depois de 18_user_management.sql.
+--
+-- Até aqui, "Suspender" em /admin/usuarios só mudava um valor no
+-- banco — não impedia nada de verdade. Isso corrige a parte que
+-- importa: usa policies RESTRICTIVE, que o Postgres exige em CIMA de
+-- qualquer policy permissiva já existente (as 18 anteriores continuam
+-- intocadas — RESTRICTIVE só ADICIONA uma trava obrigatória, nunca
+-- abre acesso novo). Isso é deliberado: reescrever as policies
+-- existentes para embutir essa checagem seria um retrabalho grande e
+-- arriscado; RESTRICTIVE resolve com risco de regressão mínimo.
+
+create or replace function public.is_active_user()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce(
+    (select status = 'active' from users where auth_user_id = auth.uid()),
+    -- Se ainda não existe linha em `users` (ex.: no instante entre o
+    -- signup e a auto-criação em getCurrentAppUser), não bloqueia —
+    -- ninguém pode estar "suspenso" antes de ter perfil.
+    true
+  );
+$$;
+
+-- Perfil de professor, linha de pesquisa, laboratório
+create policy "Bloqueia escrita de suspenso (professors insert)" on professors
+  as restrictive for insert with check (public.is_active_user());
+create policy "Bloqueia escrita de suspenso (professors update)" on professors
+  as restrictive for update using (public.is_active_user());
+
+create policy "Bloqueia escrita de suspenso (research_lines insert)" on research_lines
+  as restrictive for insert with check (public.is_active_user());
+create policy "Bloqueia escrita de suspenso (research_lines update)" on research_lines
+  as restrictive for update using (public.is_active_user());
+
+create policy "Bloqueia escrita de suspenso (laboratories insert)" on laboratories
+  as restrictive for insert with check (public.is_active_user());
+create policy "Bloqueia escrita de suspenso (laboratories update)" on laboratories
+  as restrictive for update using (public.is_active_user());
+
+-- Projetos e interesse
+create policy "Bloqueia escrita de suspenso (projects insert)" on projects
+  as restrictive for insert with check (public.is_active_user());
+create policy "Bloqueia escrita de suspenso (projects update)" on projects
+  as restrictive for update using (public.is_active_user());
+
+create policy "Bloqueia escrita de suspenso (project_members insert)" on project_members
+  as restrictive for insert with check (public.is_active_user());
+create policy "Bloqueia escrita de suspenso (project_members delete)" on project_members
+  as restrictive for delete using (public.is_active_user());
+
+-- Publicações
+create policy "Bloqueia escrita de suspenso (publications insert)" on publications
+  as restrictive for insert with check (public.is_active_user());
+create policy "Bloqueia escrita de suspenso (publications update)" on publications
+  as restrictive for update using (public.is_active_user());
+
+create policy "Bloqueia escrita de suspenso (publication_authors insert)" on publication_authors
+  as restrictive for insert with check (public.is_active_user());
+
+create policy "Bloqueia escrita de suspenso (publication_projects insert)" on publication_projects
+  as restrictive for insert with check (public.is_active_user());
+
+-- Interesses do aluno e favoritos
+create policy "Bloqueia escrita de suspenso (interests insert)" on interests
+  as restrictive for insert with check (public.is_active_user());
+create policy "Bloqueia escrita de suspenso (interests delete)" on interests
+  as restrictive for delete using (public.is_active_user());
+
+create policy "Bloqueia escrita de suspenso (saved_items insert)" on saved_items
+  as restrictive for insert with check (public.is_active_user());
+create policy "Bloqueia escrita de suspenso (saved_items delete)" on saved_items
+  as restrictive for delete using (public.is_active_user());
+
+-- Perfil de aluno
+create policy "Bloqueia escrita de suspenso (students insert)" on students
+  as restrictive for insert with check (public.is_active_user());
+create policy "Bloqueia escrita de suspenso (students update)" on students
+  as restrictive for update using (public.is_active_user());
+
+-- Edição do próprio registro em `users` (nome, e-mail, etc.) — não
+-- inclui INSERT de propósito: é essa mesma tabela que confirma se a
+-- pessoa está suspensa, e o INSERT inicial (auto-criação) precisa
+-- continuar funcionando mesmo antes de a linha existir (coberto pelo
+-- `coalesce(..., true)` da função acima de qualquer forma, mas
+-- deixamos o INSERT fora daqui por clareza).
+create policy "Bloqueia escrita de suspenso (users update)" on users
+  as restrictive for update using (public.is_active_user());
 

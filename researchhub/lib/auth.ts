@@ -30,7 +30,7 @@ export async function getCurrentAppUser() {
 
   const { data: existing } = await supabase
     .from("users")
-    .select("id, name, email, role, department_id")
+    .select("id, name, email, role, department_id, status")
     .eq("auth_user_id", authUser.id)
     .maybeSingle();
 
@@ -44,7 +44,7 @@ export async function getCurrentAppUser() {
   const { data: created } = await supabase
     .from("users")
     .insert({ auth_user_id: authUser.id, name, email: authUser.email!, role })
-    .select("id, name, email, role, department_id")
+    .select("id, name, email, role, department_id, status")
     .single();
 
   if (created && role === "student") {
