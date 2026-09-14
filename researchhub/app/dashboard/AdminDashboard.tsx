@@ -43,9 +43,14 @@ export default function AdminDashboard({
       <p className="text-xs uppercase tracking-wide text-teal font-medium">Administrador</p>
       <div className="flex items-start justify-between gap-6">
         <h1 className="font-display text-3xl text-ink mt-1">{universityName}</h1>
-        <Link href="/universidade/editar" className="text-sm text-teal font-medium hover:underline whitespace-nowrap mt-2">
-          Editar dados da universidade
-        </Link>
+        <div className="flex flex-col items-end gap-1 mt-2">
+          <Link href="/admin/usuarios" className="text-sm text-teal font-medium hover:underline whitespace-nowrap">
+            Gerenciar usuários
+          </Link>
+          <Link href="/universidade/editar" className="text-sm text-teal font-medium hover:underline whitespace-nowrap">
+            Editar dados da universidade
+          </Link>
+        </div>
       </div>
 
       {/* Visão geral — números que importam pra quem gerencia a universidade */}

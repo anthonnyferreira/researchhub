@@ -70,7 +70,11 @@ rodar esse arquivo.
 12. `12_admin.sql` — setup inicial + papel admin
 13. `13_publications.sql` — publicações científicas
 14. `14_bulk_import.sql` — importação em massa de professores
-15. `15_admin_dashboard.sql` — visão completa do admin (novo)
+15. `15_admin_dashboard.sql` — visão completa do admin
+16. `16_fix_recursion.sql` — correção segura da policy de usuários
+17. `17_coordinator_dashboard.sql` — visão completa do coordenador
+18. `18_user_management.sql` — gestão institucional de usuários
+19. `19_suspend_enforcement.sql` — bloqueio real de contas suspensas
 - `install.sql` — **tudo acima (exceto seed) num arquivo só**, para
   provisionar clientes novos rapidamente
 
@@ -78,7 +82,7 @@ rodar esse arquivo.
 
 1. Crie um projeto em [supabase.com](https://supabase.com) (gratuito).
 2. No SQL Editor, rode nesta ordem: `1_schema.sql`, `2_seed.sql`, depois
-   `3` até `14` em ordem numérica (ou use `install.sql` + rode `2_seed.sql`
+   `3` até `19` em ordem numérica (ou use `install.sql` + rode `2_seed.sql`
    separadamente se quiser os dados de exemplo).
 3. Em **Authentication → Providers → Email**, desmarque "Confirm email"
    enquanto testa.
@@ -88,7 +92,7 @@ rodar esse arquivo.
 
 ## Testando o setup de uma universidade nova (sem seed)
 
-1. Rode `1_schema.sql` + `3` a `14` (pule o `2_seed.sql`) — ou simplesmente
+1. Rode `1_schema.sql` + `3` a `19` (pule o `2_seed.sql`) — ou simplesmente
    `install.sql`
 2. Cadastre uma conta qualquer → acesse `/configuracao` → preencha o nome
    da universidade → confirme que você vira admin e cai no painel
@@ -146,6 +150,17 @@ rodar esse arquivo.
   de interesses recentes de toda a universidade — não só de um
   departamento. Exigiu 3 políticas de RLS novas (`15_admin_dashboard.sql`)
   para o admin enxergar dados que antes só dono/coordenador viam.
+
+## Segurança de contas suspensas
+
+Depois de executar `19_suspend_enforcement.sql`, uma conta suspensa é
+bloqueada nas escritas pelo banco e direcionada para
+`/conta-suspensa` pela aplicação. As rotas de login, recuperação de
+senha e logout continuam acessíveis para evitar loops.
+
+O arquivo também impede que usuários comuns alterem diretamente os
+próprios campos de papel, status, universidade e departamento. Para
+instalações novas, essa proteção já está consolidada em `install.sql`.
 
 ## Design
 

@@ -12,14 +12,26 @@ type PendingProject = {
   professors: { name: string } | null;
 };
 
+type RecentInterest = { id: string; studentName: string; projectTitle: string };
+
 export default function CoordinatorDashboard({
   departmentName,
   pendingProjects,
   publishedCount,
+  professorCount,
+  projectCount,
+  publicationCount,
+  totalInterests,
+  recentInterests,
 }: {
   departmentName: string;
   pendingProjects: PendingProject[];
   publishedCount: number;
+  professorCount: number;
+  projectCount: number;
+  publicationCount: number;
+  totalInterests: number;
+  recentInterests: RecentInterest[];
 }) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,9 +62,13 @@ export default function CoordinatorDashboard({
       <p className="text-xs uppercase tracking-wide text-teal font-medium">Coordenador</p>
       <h1 className="font-display text-3xl text-ink mt-1">{departmentName}</h1>
 
-      <div className="flex gap-6 mt-6 text-sm text-ink-soft border-y border-line py-3">
-        <span>{pendingProjects.length} aguardando aprovação</span>
-        <span>{publishedCount} projetos publicados</span>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8">
+        <Stat label="Professores" value={professorCount} />
+        <Stat label="Projetos" value={projectCount} />
+        <Stat label="Publicados/Recrutando" value={publishedCount} />
+        <Stat label="Aguardando aprovação" value={pendingProjects.length} />
+        <Stat label="Publicações" value={publicationCount} />
+        <Stat label="Interesses manifestados" value={totalInterests} />
       </div>
 
       <section className="mt-10">
@@ -95,6 +111,34 @@ export default function CoordinatorDashboard({
           <p className="text-sm text-ink-soft">Nenhum projeto aguardando aprovação no momento.</p>
         )}
       </section>
+
+      <section className="mt-12">
+        <h2 className="text-sm uppercase tracking-wide text-ink-soft font-medium mb-4">
+          Interesses recentes no departamento
+        </h2>
+        {recentInterests.length > 0 ? (
+          <div className="space-y-2">
+            {recentInterests.map((i) => (
+              <div key={i.id} className="text-sm border border-line rounded-card px-4 py-2.5">
+                <span className="text-ink font-medium">{i.studentName}</span>
+                <span className="text-ink-soft"> se interessou em </span>
+                <span className="text-ink">{i.projectTitle}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-soft">Nenhum interesse manifestado ainda.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="border border-line rounded-card px-4 py-3">
+      <p className="font-display text-2xl text-ink">{value}</p>
+      <p className="text-xs text-ink-soft mt-0.5">{label}</p>
     </div>
   );
 }
