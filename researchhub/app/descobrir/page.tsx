@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type Result = {
@@ -11,22 +12,15 @@ type Result = {
   methodology: string;
 };
 
-const breadthLabels = {
-  very_broad: "Muito amplo",
-  broad: "Amplo",
-  balanced: "Bom ponto de partida",
-  niche: "Nicho específico",
-  scarce: "Literatura escassa",
-};
-
+const breadthLabels = { very_broad: "Muito amplo", broad: "Amplo", balanced: "Bom ponto de partida", niche: "Nicho específico", scarce: "Literatura escassa" };
 const trendLabels = { growing: "Em crescimento", stable: "Estável", declining: "Em redução" };
 
 export default function DiscoverPage() {
-  const [topic, setTopic] = useState("semaglutide depression");
+  const params = useSearchParams();
+  const [topic, setTopic] = useState(params.get("tema") || "semaglutide depression");
   const [result, setResult] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const maxTimeline = useMemo(() => Math.max(1, ...(result?.timeline.map((x) => x.count) ?? [1])), [result]);
 
   async function analyze(e: React.FormEvent) {
@@ -41,11 +35,7 @@ export default function DiscoverPage() {
     } finally { setLoading(false); }
   }
 
-  const refinements = result ? [
-    `${result.topic} AND young adults`,
-    `${result.topic} AND clinical outcomes`,
-    `${result.topic} AND systematic review`,
-  ] : [];
+  const refinements = result ? [`${result.topic} AND young adults`, `${result.topic} AND clinical outcomes`, `${result.topic} AND systematic review`] : [];
 
   return (
     <div className="max-w-5xl mx-auto">
