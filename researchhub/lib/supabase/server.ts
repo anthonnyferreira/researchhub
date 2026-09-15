@@ -1,21 +1,20 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-// Cliente server-side (Server Components, Server Actions, Route Handlers).
-// Usa @supabase/ssr para ler/escrever a sessão do usuário via cookies,
-// necessário agora que temos login (Supabase Auth).
 export async function supabaseServer() {
   const cookieStore = await cookies();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !anonKey) {
+  if (!url || !key) {
     throw new Error(
-      "Supabase não configurado. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no .env.local"
+      "Supabase não configurado. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (ou NEXT_PUBLIC_SUPABASE_ANON_KEY)."
     );
   }
 
-  return createServerClient(url, anonKey, {
+  return createServerClient(url, key, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -26,8 +25,7 @@ export async function supabaseServer() {
             cookieStore.set(name, value, options)
           );
         } catch {
-          // chamado a partir de um Server Component sem permissão de escrita
-          // de cookies; o middleware cuida de renovar a sessão nesses casos.
+          // Em Server Components, o middleware cuida da renovação da sessão.
         }
       },
     },
