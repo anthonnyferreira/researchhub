@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { supabaseBrowser } from "@/lib/supabase/browser";
 
 const stages = ["Tema e pergunta", "Objetivos e hipótese", "Desenho do estudo", "População e critérios", "Desfechos e variáveis", "Métodos e análise", "Referências", "Manuscrito"];
 
 type Draft = { theme: string; question: string; objective: string; studyType: string; population: string; outcome: string };
+
+type SaveState = "idle" | "loading" | "saved" | "local" | "error";
 
 export default function MeuTrabalhoPage() {
   const [theme, setTheme] = useState("");
@@ -13,10 +17,46 @@ export default function MeuTrabalhoPage() {
   const [studyType, setStudyType] = useState("Observacional transversal");
   const [population, setPopulation] = useState("");
   const [outcome, setOutcome] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("loading");
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    void loadProject();
+  }, []);
+
+  async function loadProject() {
     const fromUrl = new URLSearchParams(window.location.search).get("tema");
+    const supabase = supabaseBrowser();
+    const { data: auth } = await supabase.auth.getUser();
+
+    if (auth.user) {
+      setLoggedIn(true);
+      const { data: appUser } = await supabase.from("users").select("id").eq("auth_user_id", auth.user.id).maybeSingle();
+      if (appUser) {
+        const { data: project, error } = await supabase
+          .from("scholar_projects")
+          .select("id, theme, research_question, objective, study_type, population, primary_outcome")
+          .eq("owner_user_id", appUser.id)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!error && project) {
+          setProjectId(project.id);
+          setTheme(fromUrl || project.theme || "");
+          setQuestion(project.research_question || "");
+          setObjective(project.objective || "");
+          setStudyType(project.study_type || "Observacional transversal");
+          setPopulation(project.population || "");
+          setOutcome(project.primary_outcome || "");
+          setSaveState("saved");
+          return;
+        }
+      }
+    }
+
     const stored = window.localStorage.getItem("researchhub-scholar-draft");
     if (stored) {
       try {
@@ -27,13 +67,14 @@ export default function MeuTrabalhoPage() {
         setStudyType(draft.studyType || "Observacional transversal");
         setPopulation(draft.population || "");
         setOutcome(draft.outcome || "");
-        return;
       } catch {}
+    } else if (fromUrl) {
+      setTheme(fromUrl);
     }
-    if (fromUrl) setTheme(fromUrl);
-  }, []);
+    setSaveState("local");
+  }
 
-  const completed = useMemo(() => [theme, question, objective, population, outcome].filter(Boolean).length, [theme, question, objective, population, outcome]);
+  const completed = useMemo(() => [theme, question, objective, population, outcome].filter((x) => x.trim()).length, [theme, question, objective, population, outcome]);
   const progress = Math.round((completed / 5) * 100);
 
   function suggestQuestion() {
@@ -46,30 +87,86 @@ export default function MeuTrabalhoPage() {
     setObjective(`Avaliar a relação entre ${theme.toLowerCase()} e desfechos clínicos relevantes na população estudada.`);
   }
 
-  function saveDraft() {
+  async function saveDraft() {
+    setSaveState("loading");
+    setMessage(null);
     const draft: Draft = { theme, question, objective, studyType, population, outcome };
     window.localStorage.setItem("researchhub-scholar-draft", JSON.stringify(draft));
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 2500);
+
+    const supabase = supabaseBrowser();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) {
+      setSaveState("local");
+      setMessage("Rascunho salvo neste dispositivo. Entre na sua conta para sincronizar entre dispositivos.");
+      return;
+    }
+
+    const { data: appUser } = await supabase.from("users").select("id").eq("auth_user_id", auth.user.id).maybeSingle();
+    if (!appUser) {
+      setSaveState("error");
+      setMessage("Não foi possível localizar seu perfil de usuário.");
+      return;
+    }
+
+    const payload = {
+      owner_user_id: appUser.id,
+      title: theme.trim() || "Projeto científico sem título",
+      theme: theme.trim() || null,
+      research_question: question.trim() || null,
+      objective: objective.trim() || null,
+      study_type: studyType || null,
+      population: population.trim() || null,
+      primary_outcome: outcome.trim() || null,
+      status: progress >= 80 ? "planning" : "draft",
+      updated_at: new Date().toISOString(),
+    };
+
+    if (projectId) {
+      const { error } = await supabase.from("scholar_projects").update(payload).eq("id", projectId);
+      if (error) {
+        setSaveState("local");
+        setMessage("Salvo localmente. Para sincronizar no banco, execute a migration 20_scholar.sql no Supabase.");
+        return;
+      }
+    } else {
+      const { data, error } = await supabase.from("scholar_projects").insert(payload).select("id").single();
+      if (error) {
+        setSaveState("local");
+        setMessage("Salvo localmente. Para sincronizar no banco, execute a migration 20_scholar.sql no Supabase.");
+        return;
+      }
+      setProjectId(data.id);
+    }
+
+    setLoggedIn(true);
+    setSaveState("saved");
+    setMessage("Projeto sincronizado com sua conta.");
   }
 
   return (
-    <div className="max-w-6xl mx-auto grid lg:grid-cols-[260px_1fr] gap-8">
+    <div className="max-w-6xl mx-auto grid lg:grid-cols-[270px_1fr] gap-8">
       <aside className="lg:sticky lg:top-24 self-start">
-        <p className="text-xs uppercase tracking-widest text-teal font-semibold">Seu projeto</p>
+        <p className="text-xs uppercase tracking-widest text-teal font-semibold">Meu projeto</p>
         <h1 className="font-display text-2xl mt-2">Construtor científico</h1>
-        <div className="mt-5 h-2 bg-line rounded-full overflow-hidden"><div className="h-full bg-teal" style={{ width: `${progress}%` }} /></div>
+        <div className="mt-5 h-2 bg-line rounded-full overflow-hidden"><div className="h-full bg-teal transition-all" style={{ width: `${progress}%` }} /></div>
         <p className="text-xs text-ink-soft mt-2">{progress}% da estrutura inicial preenchida</p>
+
+        <div className={`mt-4 rounded-card p-3 text-xs ${saveState === "saved" ? "bg-teal-soft text-teal" : saveState === "error" ? "bg-red-50 text-red-700" : "bg-white border border-line text-ink-soft"}`}>
+          {saveState === "loading" ? "Carregando projeto..." : saveState === "saved" ? "✓ Sincronizado com sua conta" : loggedIn ? "Rascunho local — sincronize para salvar na conta" : "Salvamento local — entre para sincronizar"}
+        </div>
+
         <div className="mt-6 space-y-1">
           {stages.map((stage, i) => <div key={stage} className={`text-sm px-3 py-2 rounded-card ${i === 0 ? "bg-teal-soft text-teal font-medium" : "text-ink-soft"}`}>{i + 1}. {stage}</div>)}
         </div>
+
+        <Link href="/biblioteca" className="block mt-5 text-sm text-teal font-medium hover:underline">Abrir biblioteca científica →</Link>
       </aside>
 
       <div>
         <div className="max-w-3xl">
           <p className="text-xs uppercase tracking-widest text-teal font-semibold">Etapa 1</p>
           <h2 className="font-display text-4xl mt-2">Transforme o tema em uma pergunta pesquisável.</h2>
-          <p className="text-ink-soft mt-3 leading-relaxed">Este protótipo organiza as decisões metodológicas em blocos. As sugestões ajudam a estruturar o raciocínio, mas você continua responsável pela escolha científica final.</p>
+          <p className="text-ink-soft mt-3 leading-relaxed">As decisões ficam ligadas ao seu projeto. Ao entrar com uma conta, você pode continuar de outro dispositivo sem perder o progresso.</p>
         </div>
 
         <section className="mt-8 space-y-5">
@@ -101,8 +198,13 @@ export default function MeuTrabalhoPage() {
           </div>
 
           <div className="bg-ink text-white rounded-2xl p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-            <div><p className="text-xs uppercase tracking-widest text-teal-soft">Resumo do protocolo</p><h3 className="font-display text-2xl mt-2">{theme || "Seu tema aparecerá aqui"}</h3><p className="text-white/70 text-sm mt-2">{question || "Preencha a pergunta para visualizar o núcleo científico do projeto."}</p>{saved && <p className="text-teal-soft text-xs mt-3">Rascunho salvo neste dispositivo.</p>}</div>
-            <button onClick={saveDraft} className="bg-white text-ink px-5 py-3 rounded-card font-medium shrink-0">Salvar rascunho</button>
+            <div>
+              <p className="text-xs uppercase tracking-widest text-teal-soft">Resumo do protocolo</p>
+              <h3 className="font-display text-2xl mt-2">{theme || "Seu tema aparecerá aqui"}</h3>
+              <p className="text-white/70 text-sm mt-2">{question || "Preencha a pergunta para visualizar o núcleo científico do projeto."}</p>
+              {message && <p className="text-teal-soft text-xs mt-3">{message}</p>}
+            </div>
+            <button onClick={saveDraft} disabled={saveState === "loading"} className="bg-white text-ink px-5 py-3 rounded-card font-medium shrink-0 disabled:opacity-60">{saveState === "loading" ? "Salvando..." : projectId ? "Salvar alterações" : "Salvar projeto"}</button>
           </div>
         </section>
       </div>
