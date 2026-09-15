@@ -5,8 +5,8 @@ import { getCurrentAppUser } from "@/lib/auth";
 import LogoutButton from "@/components/LogoutButton";
 
 export const metadata: Metadata = {
-  title: "ResearchHub — Encontre a pesquisa certa",
-  description: "A infraestrutura de descoberta científica da sua universidade.",
+  title: "ResearchHub Scholar — Pesquisa científica guiada",
+  description: "Da ideia ao trabalho científico para estudantes de medicina e residentes.",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -15,38 +15,36 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="pt-BR">
       <body className="font-sans antialiased">
-        <header className="border-b border-line">
-          <div className="mx-auto max-w-5xl px-6 py-5 flex items-center justify-between">
-            <Link href="/" className="font-display text-xl tracking-tight text-ink">
-              Research<span className="text-teal">Hub</span>
+        <header className="border-b border-line bg-paper/95 sticky top-0 z-30 backdrop-blur">
+          <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between gap-4">
+            <Link href="/" className="font-display text-xl tracking-tight text-ink whitespace-nowrap">
+              Research<span className="text-teal">Hub</span>{" "}
+              <span className="text-xs font-sans uppercase tracking-wider text-ink-soft">Scholar</span>
             </Link>
-            <nav className="text-sm text-ink-soft flex items-center gap-6">
-              <Link href="/buscar" className="hover:text-teal">Buscar</Link>
-              {appUser && (
-                <Link href="/dashboard" className="hover:text-teal">Painel</Link>
-              )}
+            <nav className="text-sm text-ink-soft flex items-center gap-4 md:gap-6">
+              <Link href="/descobrir" className="hover:text-teal hidden sm:block">Radar</Link>
+              <Link href="/ideias" className="hover:text-teal hidden sm:block">Ideias</Link>
+              <Link href="/biblioteca" className="hover:text-teal hidden md:block">Biblioteca</Link>
+              <Link href="/meu-trabalho" className="hover:text-teal hidden md:block">Meu trabalho</Link>
               {appUser ? (
                 <>
-                  <span className="text-ink-soft/70">{appUser.name}</span>
+                  <Link href="/dashboard" className="hover:text-teal hidden lg:block">Painel institucional</Link>
+                  <span className="text-ink-soft/70 hidden xl:inline">{appUser.name}</span>
                   <LogoutButton />
                 </>
               ) : (
                 <>
                   <Link href="/login" className="hover:text-teal">Entrar</Link>
-                  <Link
-                    href="/cadastro"
-                    className="text-white bg-teal px-3 py-1.5 rounded-card hover:bg-teal/90 transition-colors"
-                  >
-                    Criar conta
-                  </Link>
+                  <Link href="/cadastro" className="text-white bg-teal px-3 py-1.5 rounded-card hover:bg-teal/90 transition-colors">Criar conta</Link>
                 </>
               )}
             </nav>
           </div>
         </header>
-        <main className="mx-auto max-w-5xl px-6 py-10">{children}</main>
-        <footer className="mx-auto max-w-5xl px-6 py-10 text-xs text-ink-soft/70 border-t border-line mt-16">
-          ResearchHub — organiza relações, não documentos.
+        <main className="mx-auto max-w-6xl px-6 py-8 md:py-10">{children}</main>
+        <footer className="mx-auto max-w-6xl px-6 py-10 text-xs text-ink-soft/70 border-t border-line mt-16 flex flex-col sm:flex-row gap-2 sm:justify-between">
+          <span>ResearchHub Scholar — transforme curiosidade em pesquisa estruturada.</span>
+          <span>Ferramenta de apoio acadêmico; não substitui orientação científica ou avaliação ética.</span>
         </footer>
       </body>
     </html>

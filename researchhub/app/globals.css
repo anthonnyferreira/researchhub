@@ -4,9 +4,24 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background-color: #FAFAF7;
   color: #14213D;
+}
+
+summary {
+  list-style-position: outside;
+}
+
+textarea,
+input,
+select,
+button {
+  font: inherit;
 }
 
 /* Fio de conexão — o elemento de assinatura do produto: tudo é ligado. */
