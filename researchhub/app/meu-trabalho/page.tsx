@@ -1,28 +1,37 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-const stages = [
-  "Tema e pergunta",
-  "Objetivos e hipótese",
-  "Desenho do estudo",
-  "População e critérios",
-  "Desfechos e variáveis",
-  "Métodos e análise",
-  "Referências",
-  "Manuscrito",
-];
+const stages = ["Tema e pergunta", "Objetivos e hipótese", "Desenho do estudo", "População e critérios", "Desfechos e variáveis", "Métodos e análise", "Referências", "Manuscrito"];
+
+type Draft = { theme: string; question: string; objective: string; studyType: string; population: string; outcome: string };
 
 export default function MeuTrabalhoPage() {
-  const params = useSearchParams();
-  const initialTheme = params.get("tema") ?? "";
-  const [theme, setTheme] = useState(initialTheme);
+  const [theme, setTheme] = useState("");
   const [question, setQuestion] = useState("");
   const [objective, setObjective] = useState("");
   const [studyType, setStudyType] = useState("Observacional transversal");
   const [population, setPopulation] = useState("");
   const [outcome, setOutcome] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("tema");
+    const stored = window.localStorage.getItem("researchhub-scholar-draft");
+    if (stored) {
+      try {
+        const draft = JSON.parse(stored) as Draft;
+        setTheme(fromUrl || draft.theme || "");
+        setQuestion(draft.question || "");
+        setObjective(draft.objective || "");
+        setStudyType(draft.studyType || "Observacional transversal");
+        setPopulation(draft.population || "");
+        setOutcome(draft.outcome || "");
+        return;
+      } catch {}
+    }
+    if (fromUrl) setTheme(fromUrl);
+  }, []);
 
   const completed = useMemo(() => [theme, question, objective, population, outcome].filter(Boolean).length, [theme, question, objective, population, outcome]);
   const progress = Math.round((completed / 5) * 100);
@@ -35,6 +44,13 @@ export default function MeuTrabalhoPage() {
   function suggestObjective() {
     if (!theme.trim()) return;
     setObjective(`Avaliar a relação entre ${theme.toLowerCase()} e desfechos clínicos relevantes na população estudada.`);
+  }
+
+  function saveDraft() {
+    const draft: Draft = { theme, question, objective, studyType, population, outcome };
+    window.localStorage.setItem("researchhub-scholar-draft", JSON.stringify(draft));
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 2500);
   }
 
   return (
@@ -85,8 +101,8 @@ export default function MeuTrabalhoPage() {
           </div>
 
           <div className="bg-ink text-white rounded-2xl p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-            <div><p className="text-xs uppercase tracking-widest text-teal-soft">Resumo do protocolo</p><h3 className="font-display text-2xl mt-2">{theme || "Seu tema aparecerá aqui"}</h3><p className="text-white/70 text-sm mt-2">{question || "Preencha a pergunta para visualizar o núcleo científico do projeto."}</p></div>
-            <button className="bg-white text-ink px-5 py-3 rounded-card font-medium shrink-0">Salvar rascunho</button>
+            <div><p className="text-xs uppercase tracking-widest text-teal-soft">Resumo do protocolo</p><h3 className="font-display text-2xl mt-2">{theme || "Seu tema aparecerá aqui"}</h3><p className="text-white/70 text-sm mt-2">{question || "Preencha a pergunta para visualizar o núcleo científico do projeto."}</p>{saved && <p className="text-teal-soft text-xs mt-3">Rascunho salvo neste dispositivo.</p>}</div>
+            <button onClick={saveDraft} className="bg-white text-ink px-5 py-3 rounded-card font-medium shrink-0">Salvar rascunho</button>
           </div>
         </section>
       </div>
