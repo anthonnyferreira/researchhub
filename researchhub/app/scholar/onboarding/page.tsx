@@ -41,29 +41,24 @@ export default function ScholarOnboardingPage() {
       return;
     }
 
-    const { data: appUser, error: userError } = await supabase
-      .from("users")
-      .select("id")
-      .eq("auth_user_id", auth.user.id)
-      .single();
+    const metadataStage = auth.user.user_metadata?.scholar_stage;
+    const userType = metadataStage === "resident" ? "resident" : metadataStage === "professor" ? "advisor" : "student";
 
-    if (userError || !appUser) {
-      setError("Não foi possível localizar seu perfil. Atualize a página e tente novamente.");
-      setLoading(false);
-      return;
-    }
-
-    const { error: profileError } = await supabase.from("scholar_profiles").upsert({
-      user_id: appUser.id,
+    const { error: profileError } = await supabase.from("profiles").upsert({
+      id: auth.user.id,
+      name: auth.user.user_metadata?.name || auth.user.email?.split("@")[0] || null,
+      email: auth.user.email || null,
+      user_type: userType,
       training_stage: stage,
       specialty: specialty.trim() || null,
       institution: institution.trim() || null,
       main_goal: goal,
+      onboarding_completed: true,
       updated_at: new Date().toISOString(),
     });
 
     if (profileError) {
-      setError("O perfil Scholar ainda não está habilitado neste banco. Rode a migration 20_scholar.sql no Supabase e tente novamente.");
+      setError("Não foi possível salvar seu perfil Scholar. Verifique se o scholar_install.sql foi executado no Supabase novo.");
       setLoading(false);
       return;
     }
