@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
-import { getCurrentAppUser } from "@/lib/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 import LogoutButton from "@/components/LogoutButton";
 
 export const metadata: Metadata = {
@@ -10,7 +10,18 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const appUser = await getCurrentAppUser();
+  const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let displayName: string | null = null;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("name")
+      .eq("id", user.id)
+      .maybeSingle();
+    displayName = profile?.name || user.user_metadata?.name || user.email?.split("@")[0] || null;
+  }
 
   return (
     <html lang="pt-BR">
@@ -25,11 +36,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/descobrir" className="hover:text-teal hidden sm:block">Radar</Link>
               <Link href="/ideias" className="hover:text-teal hidden sm:block">Ideias</Link>
               <Link href="/biblioteca" className="hover:text-teal hidden md:block">Biblioteca</Link>
-              <Link href="/meu-trabalho" className="hover:text-teal hidden md:block">Meu trabalho</Link>
-              {appUser ? (
+              <Link href="/meu-trabalho" className="hover:text-teal hidden md:block">Meu projeto</Link>
+              {user ? (
                 <>
-                  <Link href="/dashboard" className="hover:text-teal hidden lg:block">Painel institucional</Link>
-                  <span className="text-ink-soft/70 hidden xl:inline">{appUser.name}</span>
+                  {displayName && <span className="text-ink-soft/70 hidden xl:inline">{displayName}</span>}
                   <LogoutButton />
                 </>
               ) : (
