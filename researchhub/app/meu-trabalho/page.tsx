@@ -7,7 +7,6 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 const stages = ["Tema e pergunta", "Objetivos e hipótese", "Desenho do estudo", "População e critérios", "Desfechos e variáveis", "Métodos e análise", "Referências", "Manuscrito"];
 
 type Draft = { theme: string; question: string; objective: string; studyType: string; population: string; outcome: string };
-
 type SaveState = "idle" | "loading" | "saved" | "local" | "error";
 
 export default function MeuTrabalhoPage() {
@@ -22,9 +21,7 @@ export default function MeuTrabalhoPage() {
   const [saveState, setSaveState] = useState<SaveState>("loading");
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    void loadProject();
-  }, []);
+  useEffect(() => { void loadProject(); }, []);
 
   async function loadProject() {
     const fromUrl = new URLSearchParams(window.location.search).get("tema");
@@ -33,27 +30,24 @@ export default function MeuTrabalhoPage() {
 
     if (auth.user) {
       setLoggedIn(true);
-      const { data: appUser } = await supabase.from("users").select("id").eq("auth_user_id", auth.user.id).maybeSingle();
-      if (appUser) {
-        const { data: project, error } = await supabase
-          .from("scholar_projects")
-          .select("id, theme, research_question, objective, study_type, population, primary_outcome")
-          .eq("owner_user_id", appUser.id)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      const { data: project, error } = await supabase
+        .from("research_projects")
+        .select("id, theme, research_question, objective, study_type, population, primary_outcome")
+        .eq("owner_id", auth.user.id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-        if (!error && project) {
-          setProjectId(project.id);
-          setTheme(fromUrl || project.theme || "");
-          setQuestion(project.research_question || "");
-          setObjective(project.objective || "");
-          setStudyType(project.study_type || "Observacional transversal");
-          setPopulation(project.population || "");
-          setOutcome(project.primary_outcome || "");
-          setSaveState("saved");
-          return;
-        }
+      if (!error && project) {
+        setProjectId(project.id);
+        setTheme(fromUrl || project.theme || "");
+        setQuestion(project.research_question || "");
+        setObjective(project.objective || "");
+        setStudyType(project.study_type || "Observacional transversal");
+        setPopulation(project.population || "");
+        setOutcome(project.primary_outcome || "");
+        setSaveState("saved");
+        return;
       }
     }
 
@@ -68,9 +62,7 @@ export default function MeuTrabalhoPage() {
         setPopulation(draft.population || "");
         setOutcome(draft.outcome || "");
       } catch {}
-    } else if (fromUrl) {
-      setTheme(fromUrl);
-    }
+    } else if (fromUrl) setTheme(fromUrl);
     setSaveState("local");
   }
 
@@ -101,15 +93,8 @@ export default function MeuTrabalhoPage() {
       return;
     }
 
-    const { data: appUser } = await supabase.from("users").select("id").eq("auth_user_id", auth.user.id).maybeSingle();
-    if (!appUser) {
-      setSaveState("error");
-      setMessage("Não foi possível localizar seu perfil de usuário.");
-      return;
-    }
-
     const payload = {
-      owner_user_id: appUser.id,
+      owner_id: auth.user.id,
       title: theme.trim() || "Projeto científico sem título",
       theme: theme.trim() || null,
       research_question: question.trim() || null,
@@ -118,21 +103,22 @@ export default function MeuTrabalhoPage() {
       population: population.trim() || null,
       primary_outcome: outcome.trim() || null,
       status: progress >= 80 ? "planning" : "draft",
+      progress,
       updated_at: new Date().toISOString(),
     };
 
     if (projectId) {
-      const { error } = await supabase.from("scholar_projects").update(payload).eq("id", projectId);
+      const { error } = await supabase.from("research_projects").update(payload).eq("id", projectId).eq("owner_id", auth.user.id);
       if (error) {
         setSaveState("local");
-        setMessage("Salvo localmente. Para sincronizar no banco, execute a migration 20_scholar.sql no Supabase.");
+        setMessage("Salvo localmente. O banco Scholar ainda precisa ser configurado ou conectado na Vercel.");
         return;
       }
     } else {
-      const { data, error } = await supabase.from("scholar_projects").insert(payload).select("id").single();
+      const { data, error } = await supabase.from("research_projects").insert(payload).select("id").single();
       if (error) {
         setSaveState("local");
-        setMessage("Salvo localmente. Para sincronizar no banco, execute a migration 20_scholar.sql no Supabase.");
+        setMessage("Salvo localmente. O banco Scholar ainda precisa ser configurado ou conectado na Vercel.");
         return;
       }
       setProjectId(data.id);
@@ -140,7 +126,7 @@ export default function MeuTrabalhoPage() {
 
     setLoggedIn(true);
     setSaveState("saved");
-    setMessage("Projeto sincronizado com sua conta.");
+    setMessage("Projeto sincronizado com sua conta Scholar.");
   }
 
   return (
@@ -150,15 +136,12 @@ export default function MeuTrabalhoPage() {
         <h1 className="font-display text-2xl mt-2">Construtor científico</h1>
         <div className="mt-5 h-2 bg-line rounded-full overflow-hidden"><div className="h-full bg-teal transition-all" style={{ width: `${progress}%` }} /></div>
         <p className="text-xs text-ink-soft mt-2">{progress}% da estrutura inicial preenchida</p>
-
         <div className={`mt-4 rounded-card p-3 text-xs ${saveState === "saved" ? "bg-teal-soft text-teal" : saveState === "error" ? "bg-red-50 text-red-700" : "bg-white border border-line text-ink-soft"}`}>
           {saveState === "loading" ? "Carregando projeto..." : saveState === "saved" ? "✓ Sincronizado com sua conta" : loggedIn ? "Rascunho local — sincronize para salvar na conta" : "Salvamento local — entre para sincronizar"}
         </div>
-
         <div className="mt-6 space-y-1">
           {stages.map((stage, i) => <div key={stage} className={`text-sm px-3 py-2 rounded-card ${i === 0 ? "bg-teal-soft text-teal font-medium" : "text-ink-soft"}`}>{i + 1}. {stage}</div>)}
         </div>
-
         <Link href="/biblioteca" className="block mt-5 text-sm text-teal font-medium hover:underline">Abrir biblioteca científica →</Link>
       </aside>
 
@@ -171,13 +154,11 @@ export default function MeuTrabalhoPage() {
 
         <section className="mt-8 space-y-5">
           <Field label="Tema do trabalho" value={theme} setValue={setTheme} placeholder="Ex.: associação entre semaglutida e sintomas depressivos" />
-
           <div className="bg-white border border-line rounded-2xl p-6">
             <div className="flex items-center justify-between gap-3"><label className="text-sm font-medium">Pergunta de pesquisa</label><button type="button" onClick={suggestQuestion} className="text-xs text-teal font-medium">Sugerir estrutura</button></div>
             <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={4} className="w-full mt-3 border border-line rounded-card px-4 py-3 outline-none focus:border-teal" placeholder="Qual pergunta você quer responder?" />
             <p className="text-xs text-ink-soft mt-2">Depois podemos adaptar este bloco para PICO, PECO, SPIDER ou outra estrutura conforme o tipo de estudo.</p>
           </div>
-
           <div className="grid md:grid-cols-2 gap-5">
             <div className="bg-white border border-line rounded-2xl p-6">
               <div className="flex items-center justify-between gap-3"><label className="text-sm font-medium">Objetivo geral</label><button type="button" onClick={suggestObjective} className="text-xs text-teal font-medium">Sugerir</button></div>
@@ -191,12 +172,10 @@ export default function MeuTrabalhoPage() {
               <div className="mt-4 bg-amber-soft border border-amber/20 rounded-card p-3 text-xs text-ink-soft">A escolha do desenho deve responder à pergunta e considerar viabilidade, ética e acesso aos dados.</div>
             </div>
           </div>
-
           <div className="grid md:grid-cols-2 gap-5">
             <Field label="População" value={population} setValue={setPopulation} placeholder="Ex.: adultos acompanhados em ambulatório" />
             <Field label="Desfecho principal" value={outcome} setValue={setOutcome} placeholder="Ex.: mudança no escore de sintomas depressivos" />
           </div>
-
           <div className="bg-ink text-white rounded-2xl p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
             <div>
               <p className="text-xs uppercase tracking-widest text-teal-soft">Resumo do protocolo</p>
