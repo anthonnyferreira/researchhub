@@ -18,16 +18,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="border-b border-line bg-paper/95 sticky top-0 z-30 backdrop-blur">
           <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between gap-4">
             <Link href="/" className="font-display text-xl tracking-tight text-ink whitespace-nowrap">
-              Research<span className="text-teal">Hub</span> <span className="text-xs font-sans uppercase tracking-wider text-ink-soft">Scholar</span>
+              Research<span className="text-teal">Hub</span>{" "}
+              <span className="text-xs font-sans uppercase tracking-wider text-ink-soft">Scholar</span>
             </Link>
             <nav className="text-sm text-ink-soft flex items-center gap-4 md:gap-6">
               <Link href="/descobrir" className="hover:text-teal hidden sm:block">Radar</Link>
               <Link href="/ideias" className="hover:text-teal hidden sm:block">Ideias</Link>
+              <Link href="/biblioteca" className="hover:text-teal hidden md:block">Biblioteca</Link>
               <Link href="/meu-trabalho" className="hover:text-teal hidden md:block">Meu trabalho</Link>
               {appUser ? (
                 <>
-                  <Link href="/dashboard" className="hover:text-teal hidden md:block">Painel institucional</Link>
-                  <span className="text-ink-soft/70 hidden lg:inline">{appUser.name}</span>
+                  <Link href="/dashboard" className="hover:text-teal hidden lg:block">Painel institucional</Link>
+                  <span className="text-ink-soft/70 hidden xl:inline">{appUser.name}</span>
                   <LogoutButton />
                 </>
               ) : (
