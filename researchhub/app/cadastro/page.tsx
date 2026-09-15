@@ -22,12 +22,12 @@ export default function CadastroPage() {
     setError(null);
 
     const supabase = supabaseBrowser();
-    const role = persona === "professor" ? "professor" : "student";
+    const emailRedirectTo = `${window.location.origin}/login?confirmed=1`;
 
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name, role, scholar_stage: persona } },
+      options: { data: { name, scholar_stage: persona }, emailRedirectTo },
     });
 
     if (signUpError) {
@@ -48,7 +48,7 @@ export default function CadastroPage() {
       return;
     }
 
-    router.push(persona === "professor" ? "/professores/vincular" : `/scholar/onboarding?perfil=${persona}`);
+    router.push(`/scholar/onboarding?perfil=${persona}`);
     router.refresh();
   }
 
@@ -57,7 +57,7 @@ export default function CadastroPage() {
       <div className="max-w-lg mx-auto bg-white border border-line rounded-2xl p-8">
         <p className="text-xs uppercase tracking-widest text-teal font-semibold">ResearchHub Scholar</p>
         <h1 className="font-display text-3xl text-ink mt-2">Confirme seu e-mail</h1>
-        <p className="text-ink-soft mt-4">Enviamos um link para <strong>{email}</strong>. Depois da confirmação, entre na plataforma para completar seu perfil.</p>
+        <p className="text-ink-soft mt-4">Enviamos um link para <strong>{email}</strong>. Depois da confirmação, você volta ao Scholar, faz login e completa seu perfil.</p>
       </div>
     );
   }
@@ -85,15 +85,10 @@ export default function CadastroPage() {
         <div>
           <label className="text-sm text-ink-soft">Eu sou</label>
           <div className="grid grid-cols-3 gap-2 mt-2">
-            {([
-              ["student", "Aluno"],
-              ["resident", "Residente"],
-              ["professor", "Orientador"],
-            ] as const).map(([value, label]) => (
+            {([["student", "Aluno"],["resident", "Residente"],["professor", "Orientador"]] as const).map(([value, label]) => (
               <button key={value} type="button" onClick={() => setPersona(value)} className={`border rounded-card px-2 py-3 text-sm font-medium transition-colors ${persona === value ? "border-teal bg-teal-soft text-teal" : "border-line text-ink-soft hover:border-teal/50"}`}>{label}</button>
             ))}
           </div>
-          {persona === "resident" && <p className="text-xs text-ink-soft mt-2">Seu perfil continua com permissões de usuário Scholar, mas a experiência pode ser personalizada para residência e especialidade.</p>}
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
